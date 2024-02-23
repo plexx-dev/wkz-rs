@@ -2,7 +2,7 @@
 simple tool periodically fetch your german Wunschkennzeichen
 
 ## config
-create a file called config.cfg and use the following file structure (CASE SENSITIVE)
+create a file called ``config.cfg`` and use the following file structure (CASE SENSITIVE)
 
 ```
 {
