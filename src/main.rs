@@ -1,9 +1,11 @@
 use serde::Deserialize;
 use std::fs;
 use reqwest::Error;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
+use lettre::transport::smtp::authentication::Credentials; 
+use lettre::{Message, SmtpTransport, Transport};
 
-async fn post_it(wkz: &str, city: i32) -> Result<Value, Error> {
+async fn post_it(wkz: &str, city: i32) -> Result<Response, Error> {
     let url = "https://wunschkennzeichen.zulassung.de/api/check";
     let json_data = json!({
         "numberPlateText": wkz,
@@ -27,27 +29,41 @@ async fn post_it(wkz: &str, city: i32) -> Result<Value, Error> {
         .send()
         .await?;
 
-    //println!("Status: {}", response.status());
+    let results: Response = serde_json::from_str(&response.text().await?).expect("JSON was not well formatted");
 
-    let response_body = response.text().await?;
-    //println!("Response body:\n{}", response_body);
-
-    let json: Value = serde_json::from_str(&response_body).unwrap();
-    //println!("{}", &json["results"]);
-
-    Ok(json["results"].clone())
+    Ok(results)
 }
 
 
 #[derive(Debug, Deserialize)]
 struct WKZList {
+    email: Email,
     wkzs: Vec<WKZ>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Email {
+    sender: String,
+    subject: String,
+    smtp_username: String,
+    smtp_password: String,
+    smtp_server: String
 }
 
 #[derive(Debug, Deserialize)]
 struct WKZ {
     pattern: String,
     city: i32,
+    receiver: String,
+    email_alert: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct Response {
+    success: bool,
+    message: String,
+    errors: Map<String, Value>,
+    results: Vec<String>,
 }
 
 #[tokio::main]
@@ -56,8 +72,39 @@ async fn main() -> Result<(), Error> {
     let json: WKZList = serde_json::from_str(&data).expect("JSON was not well formatted");
 
     for wkz in json.wkzs {
-        println!("Pattern: {}, {}", &wkz.pattern, post_it(&wkz.pattern, wkz.city).await?);
+        let test = post_it(&wkz.pattern, wkz.city).await?;
+        if test.success {
+            println!("Pattern: {}, {:?}", &wkz.pattern, test.results);
+
+            if !wkz.email_alert {continue;}
+            for kennzeichen in test.results {
+                send_mail(&kennzeichen, &wkz.receiver, &json.email);
+            }
+        }
     }
 
     Ok(())
+}
+
+fn send_mail(wkz: &str, receiver: &str, email_data: &Email) {
+    let email = Message::builder() 
+        .from(format!("Sender <{}>", email_data.sender).parse().unwrap()) 
+        .to(format!("Receiver <{}>", receiver).parse().unwrap()) 
+        .subject(format!("{} {}", email_data.subject, wkz)) 
+        .body(String::from(wkz)) 
+        .unwrap(); 
+
+    let creds = Credentials::new(email_data.smtp_username.clone(), email_data.smtp_password.clone()); 
+
+    // Open a remote connection to gmail 
+    let mailer = SmtpTransport::relay(&email_data.smtp_server) 
+        .unwrap() 
+        .credentials(creds) 
+        .build(); 
+
+    // Send the email 
+    match mailer.send(&email) { 
+    Ok(_) => println!("Email sent successfully!"), 
+    Err(e) => panic!("Could not send email: {:?}", e), 
+    }
 }
