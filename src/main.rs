@@ -4,6 +4,8 @@ use reqwest::Error;
 use serde_json::{json, Map, Value};
 use lettre::transport::smtp::authentication::Credentials; 
 use lettre::{Message, SmtpTransport, Transport};
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
 async fn post_it(wkz: &str, city: i32) -> Result<Response, Error> {
     let url = "https://wunschkennzeichen.zulassung.de/api/check";
@@ -68,18 +70,38 @@ struct Response {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    let seconds = 3600;
+
+    let interval = Duration::from_secs(seconds);
+    let mut next_time = Instant::now() + interval;
+    loop {
+        execute().await?;
+
+        println!("Sleeping for {} Seconds.", seconds);
+        sleep(next_time - Instant::now());
+        next_time += interval;
+    }
+
+    Ok(())
+}
+
+async fn execute() -> Result<(), Error> {
     let data = fs::read_to_string("config.cfg").expect("Unable to read file");
     let json: WKZList = serde_json::from_str(&data).expect("JSON was not well formatted");
 
     for wkz in json.wkzs {
+        println!("Checking for {}", &wkz.pattern);
         let test = post_it(&wkz.pattern, wkz.city).await?;
+
         if test.success {
-            println!("Pattern: {}, {:?}", &wkz.pattern, test.results);
+            println!("Found for Pattern: {}, {:?}", &wkz.pattern, test.results);
 
             if !wkz.email_alert {continue;}
             for kennzeichen in test.results {
                 send_mail(&kennzeichen, &wkz.receiver, &json.email);
             }
+        } else {
+            println!("Found no matches for Pattern: {}", &wkz.pattern);
         }
     }
 
@@ -88,7 +110,7 @@ async fn main() -> Result<(), Error> {
 
 fn send_mail(wkz: &str, receiver: &str, email_data: &Email) {
     let email = Message::builder() 
-        .from(format!("Sender <{}>", email_data.sender).parse().unwrap()) 
+        .from(format!("WKZ-Checker <{}>", email_data.sender).parse().unwrap()) 
         .to(format!("Receiver <{}>", receiver).parse().unwrap()) 
         .subject(format!("{} {}", email_data.subject, wkz)) 
         .body(String::from(wkz)) 
@@ -104,7 +126,7 @@ fn send_mail(wkz: &str, receiver: &str, email_data: &Email) {
 
     // Send the email 
     match mailer.send(&email) { 
-    Ok(_) => println!("Email sent successfully!"), 
-    Err(e) => panic!("Could not send email: {:?}", e), 
+    Ok(_) => println!("Email sent successfully! {}", &wkz), 
+    Err(e) => panic!("Could not send email for {}: {:?}", &wkz, e), 
     }
 }
