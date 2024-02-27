@@ -1,4 +1,4 @@
-# wkz-rs
+# wkz-rs [![Docker Image CI](https://github.com/plexx-dev/wkz-rs/actions/workflows/docker-image.yml/badge.svg)](https://github.com/plexx-dev/wkz-rs/actions/workflows/docker-image.yml)
 simple tool periodically fetch your german Wunschkennzeichen
 
 ## config
