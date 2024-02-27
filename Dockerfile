@@ -4,7 +4,7 @@ COPY . .
 RUN cargo install --path .
 
 
-FROM debian:latest as runner
+FROM ubuntu:latest as runner
 WORKDIR /app
 # make sure libssl.so.1.1 is available
 RUN apt-get update && apt-get install -y libssl && apt clean && rm -rf /var/lib/apt/lists/*
