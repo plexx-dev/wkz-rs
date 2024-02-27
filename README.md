@@ -6,14 +6,25 @@ create a file called ``config.cfg`` and use the following file structure (CASE S
 
 ```
 {
+    "email": {
+        "sender": "example@example.com",
+        "subject": "Dein Wunschkennzeichen ist frei: ",
+        "smtp_username": "example@example.com",
+        "smtp_password": "password",
+        "smtp_server": "mail.example.com"
+    },
     "wkzs": [
         {
             "pattern": "F GG ?",
-            "city": 623
+            "city": 623,
+            "receiver": "example@example.com",
+            "email_alert": true
         },
         {
             "pattern": "HH GG ??",
-            "city": 743
+            "city": 743,
+            "receiver": "example@example.com",
+            "email_alert": false
         }
     ]
 }
